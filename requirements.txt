@@ -1,0 +1,4 @@
+together
+streamlit
+python-dotenv
+watchdog
