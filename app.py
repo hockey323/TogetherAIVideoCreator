@@ -67,9 +67,8 @@ st.markdown("""
     }
     h1, h2, h3 {
         font-family: 'Inter', sans-serif;
-        background: linear-gradient(90deg, #fff, #aaa);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #ffffff !important;
+        text-shadow: 0 2px 5px rgba(0,0,0,0.5);
     }
     .metric-card {
         background: rgba(255,255,255,0.05);
