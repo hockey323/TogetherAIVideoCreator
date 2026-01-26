@@ -81,18 +81,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 # --- Configuration & Design Pattern ---
 
 # Define a standard specificiation for what a model can support
 class ModelConfig:
     def __init__(self, 
                  supported_params: set, 
-                 defaults: dict = None):
+                 defaults: dict = None,
+                 transforms: dict = None):
         self.supported_params = supported_params
         self.defaults = defaults or {}
+        self.transforms = transforms or {}
 
     def is_supported(self, param: str) -> bool:
         return param in self.supported_params
+
+    def apply_transforms(self, params: dict) -> dict:
+        new_params = params.copy()
+        for key, transform in self.transforms.items():
+            if key in new_params and new_params[key] is not None:
+                new_params[key] = transform(new_params[key])
+        return new_params
 
 # Common sets of parameters
 # Most diffusion models support these
@@ -103,8 +113,11 @@ STANDARD_DIFFUSION_PARAMS = {
 # Configuration Registry
 MODEL_REGISTRY = {
     "minimax/video-01-director": ModelConfig(
-        supported_params={"width", "height", "fps", "seconds", "output_format", "output_quality"},
-        defaults={"fps": 25, "width": 1280, "height": 720}
+        supported_params={"width", "height", "fps", "seconds", "output_format", "output_quality", "prompt", "model"},
+        defaults={"fps": 25, "width": 1280, "height": 720, "output_quality": 25},
+        transforms={
+            "seconds": str,
+        }
     ),
     "minimax/hailuo-02": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS | {"seconds"},
@@ -114,7 +127,7 @@ MODEL_REGISTRY = {
         supported_params=STANDARD_DIFFUSION_PARAMS,
     ),
     "kwaivgI/kling-2.1-master": ModelConfig(
-         supported_params=STANDARD_DIFFUSION_PARAMS, # Assuming standard for now
+         supported_params=STANDARD_DIFFUSION_PARAMS, 
     ),
     "ByteDance/Seedance-1.0-pro": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS,
@@ -171,7 +184,7 @@ with st.sidebar:
     
     # Specific Video Params
     if config.is_supported("seconds"):
-        params["seconds"] = st.slider("Duration (Seconds)", 1, 10, 5) ## Check model limits usually 4-6s
+        params["seconds"] = st.slider("Duration (Seconds)", 1, 10, 5)
 
     if config.is_supported("fps"):
         params["fps"] = st.slider("FPS", 10, 60, config.defaults.get("fps", 25))
@@ -193,10 +206,12 @@ with st.sidebar:
                     params["seed"] = seed_val
             
             if config.is_supported("output_format"):
-                params["output_format"] = st.selectbox("Format", ["mp4", "gif"], index=0)
+                # Format must be uppercase based on errors
+                params["output_format"] = st.selectbox("Format", ["MP4", "WEBM", "GIF"], index=0)
                 
             if config.is_supported("output_quality"):
-                 params["output_quality"] = st.selectbox("Quality", ["360p", "480p", "720p", "1080p"], index=2) # Example values, adjust as needed
+                 # Quality expected as integer
+                 params["output_quality"] = st.number_input("Quality (0-100)", min_value=1, max_value=100, value=config.defaults.get("output_quality", 25))
 
 # Main Input
 prompt = st.text_area("What would you like to see?", height=100, placeholder="A cinematic drone shot of a futuristic city at sunset...")
@@ -205,11 +220,16 @@ negative_prompt = None
 if config.is_supported("negative_prompt"):
     negative_prompt = st.text_input("Negative Prompt (Optional)", placeholder="blurry, low quality, distorted, watermark")
 
+
 # Generate Button
 if st.button("✨ Generate Video"):
     if not prompt:
         st.warning("Please enter a prompt first.")
     else:
+        # Clear previous error
+        if "last_error" in st.session_state:
+            del st.session_state["last_error"]
+            
         try:
             with st.spinner("🎨 Creating your masterpiece... This may take a few minutes."):
                 # Prepare arguments
@@ -221,6 +241,9 @@ if st.button("✨ Generate Video"):
                 
                 if negative_prompt:
                     create_args["negative_prompt"] = negative_prompt
+
+                # Apply Model-Specific Transforms (e.g. casting types)
+                create_args = config.apply_transforms(create_args)
 
                 # Create Job
                 start_time = time.time()
@@ -248,8 +271,8 @@ if st.button("✨ Generate Video"):
                         break
                         
                     elif status.status == "failed":
-                        status_placeholder.error("Generation Failed.")
-                        st.error(status.error if hasattr(status, 'error') else "Unknown error")
+                        error_msg = status.error if hasattr(status, 'error') else "Unknown error"
+                        st.session_state["last_error"] = f"Generation Failed: {error_msg}"
                         break
                     
                     elif status.status in ["queued", "in_progress"]:
@@ -262,7 +285,11 @@ if st.button("✨ Generate Video"):
                     time.sleep(3)
                     
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            st.session_state["last_error"] = f"An error occurred: {str(e)}"
+
+# Display Persistent Error
+if "last_error" in st.session_state:
+    st.error(st.session_state["last_error"])
 
 # Footer
 st.markdown("---")
