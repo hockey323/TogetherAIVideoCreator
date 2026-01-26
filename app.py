@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for "Wow" factor
+# Custom CSS
 st.markdown("""
 <style>
     .stApp {
@@ -81,6 +81,63 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- Configuration & Design Pattern ---
+
+# Define a standard specificiation for what a model can support
+class ModelConfig:
+    def __init__(self, 
+                 supported_params: set, 
+                 defaults: dict = None):
+        self.supported_params = supported_params
+        self.defaults = defaults or {}
+
+    def is_supported(self, param: str) -> bool:
+        return param in self.supported_params
+
+# Common sets of parameters
+# Most diffusion models support these
+STANDARD_DIFFUSION_PARAMS = {
+    "width", "height", "fps", "steps", "guidance_scale", "seed", "negative_prompt", "output_format"
+}
+
+# Configuration Registry
+MODEL_REGISTRY = {
+    "minimax/video-01-director": ModelConfig(
+        supported_params={"width", "height", "fps", "seconds", "output_format", "output_quality"},
+        defaults={"fps": 25, "width": 1280, "height": 720}
+    ),
+    "minimax/hailuo-02": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS | {"seconds"},
+        defaults={"fps": 30, "steps": 30, "guidance_scale": 7.5}
+    ),
+    "google/veo-2.0": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS,
+    ),
+    "kwaivgI/kling-2.1-master": ModelConfig(
+         supported_params=STANDARD_DIFFUSION_PARAMS, # Assuming standard for now
+    ),
+    "ByteDance/Seedance-1.0-pro": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS,
+    ),
+    "pixverse/pixverse-v5": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS,
+    ),
+    "Wan-AI/Wan2.2-T2V-A14B": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS,
+    ),
+    "openai/sora-2-pro": ModelConfig(
+        supported_params=STANDARD_DIFFUSION_PARAMS,
+    )
+}
+
+# Fallback for unknown models
+DEFAULT_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
+
+def get_model_config(model_name: str) -> ModelConfig:
+    return MODEL_REGISTRY.get(model_name, DEFAULT_CONFIG)
+
+# --------------------------------------
+
 # Main Title
 st.title("🎬 Together AI Video Studio")
 st.markdown("### Generate stunning videos with serverless AI models.")
@@ -90,39 +147,63 @@ with st.sidebar:
     st.header("⚙️ Configuration")
     
     # Model Selection
-    model_options = [
-        "minimax/video-01-director",
-        "minimax/hailuo-02",
-        "google/veo-2.0",
-        "kwaivgI/kling-2.1-master",
-        "ByteDance/Seedance-1.0-pro",
-        "pixverse/pixverse-v5",
-        "Wan-AI/Wan2.2-T2V-A14B",
-        "openai/sora-2-pro"
-    ]
+    model_options = list(MODEL_REGISTRY.keys())
     selected_model = st.selectbox("Select Model", model_options, index=0)
+    
+    # Get config for selected model
+    config = get_model_config(selected_model)
 
     st.markdown("---")
     st.subheader("Video Settings")
     
+    # helper to conditionally show input
+    params = {}
+    
     # Dimensions
+    # Always show dimensions, but we could enforce support checks if needed
     col1, col2 = st.columns(2)
     with col1:
-        width = st.number_input("Width", min_value=256, max_value=2048, value=1280, step=64)
+        if config.is_supported("width"):
+            params["width"] = st.number_input("Width", min_value=256, max_value=2048, value=config.defaults.get("width", 1280), step=64)
     with col2:
-        height = st.number_input("Height", min_value=256, max_value=2048, value=720, step=64)
+        if config.is_supported("height"):
+            params["height"] = st.number_input("Height", min_value=256, max_value=2048, value=config.defaults.get("height", 720), step=64)
     
-    # Advanced Parameters
-    with st.expander("Advanced Parameters"):
-        fps = st.slider("FPS", 10, 60, 25)
-        steps = st.slider("Steps", 10, 50, 30)
-        guidance_scale = st.slider("Guidance Scale", 1.0, 20.0, 7.5)
-        seed = st.number_input("Seed (0 = Random)", value=0, min_value=0)
-        output_format = st.selectbox("Format", ["mp4", "gif"], index=0)
+    # Specific Video Params
+    if config.is_supported("seconds"):
+        params["seconds"] = st.slider("Duration (Seconds)", 1, 10, 5) ## Check model limits usually 4-6s
+
+    if config.is_supported("fps"):
+        params["fps"] = st.slider("FPS", 10, 60, config.defaults.get("fps", 25))
+    
+    # Advanced Parameters Section
+    # Check if any advanced params are supported to decide if we show the expander
+    adv_params = ["steps", "guidance_scale", "seed", "output_format", "output_quality"]
+    if any(config.is_supported(p) for p in adv_params):
+        with st.expander("Advanced Parameters", expanded=True):
+            if config.is_supported("steps"):
+                params["steps"] = st.slider("Steps", 10, 50, config.defaults.get("steps", 30))
+            
+            if config.is_supported("guidance_scale"):
+                params["guidance_scale"] = st.slider("Guidance Scale", 1.0, 20.0, config.defaults.get("guidance_scale", 7.5))
+            
+            if config.is_supported("seed"):
+                seed_val = st.number_input("Seed (0 = Random)", value=0, min_value=0)
+                if seed_val > 0:
+                    params["seed"] = seed_val
+            
+            if config.is_supported("output_format"):
+                params["output_format"] = st.selectbox("Format", ["mp4", "gif"], index=0)
+                
+            if config.is_supported("output_quality"):
+                 params["output_quality"] = st.selectbox("Quality", ["360p", "480p", "720p", "1080p"], index=2) # Example values, adjust as needed
 
 # Main Input
 prompt = st.text_area("What would you like to see?", height=100, placeholder="A cinematic drone shot of a futuristic city at sunset...")
-negative_prompt = st.text_input("Negative Prompt (Optional)", placeholder="blurry, low quality, distorted, watermark")
+
+negative_prompt = None
+if config.is_supported("negative_prompt"):
+    negative_prompt = st.text_input("Negative Prompt (Optional)", placeholder="blurry, low quality, distorted, watermark")
 
 # Generate Button
 if st.button("✨ Generate Video"):
@@ -135,20 +216,15 @@ if st.button("✨ Generate Video"):
                 create_args = {
                     "model": selected_model,
                     "prompt": prompt,
-                    "width": width,
-                    "height": height,
-                    "fps": fps,
-                    "steps": steps,
-                    "guidance_scale": guidance_scale,
-                    # "output_format": output_format, # Check if supported by all models, API often infers
+                    **params # Unpack the dynamically built params dict
                 }
+                
                 if negative_prompt:
                     create_args["negative_prompt"] = negative_prompt
-                if seed > 0:
-                    create_args["seed"] = seed
 
                 # Create Job
                 start_time = time.time()
+                # st.write(f"Debug: Sending args: {create_args}") # Uncomment for debugging
                 job = client.videos.create(**create_args)
                 
                 status_placeholder = st.empty()
@@ -165,11 +241,8 @@ if st.button("✨ Generate Video"):
                         # Display Video
                         if hasattr(status.outputs, 'video_url'):
                             st.video(status.outputs.video_url)
-                            
-                            # Download link
                             st.markdown(f"[⬇️ Download Video]({status.outputs.video_url})")
                         
-                        # Metadata
                         with st.expander("Usage & Metadata"):
                             st.json(status.model_dump())
                         break
@@ -182,7 +255,6 @@ if st.button("✨ Generate Video"):
                     elif status.status in ["queued", "in_progress"]:
                         elapsed = time.time() - start_time
                         status_placeholder.info(f"Status: {status.status.replace('_', ' ').title()}... ({elapsed:.1f}s)")
-                        # Simulated progress since API doesn't give %
                         import math
                         prog = min(90, int(math.log(elapsed + 1) * 15))
                         progress_bar.progress(prog)
