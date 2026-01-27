@@ -83,30 +83,57 @@ st.markdown("""
 
 # --- Configuration & Design Pattern ---
 
+
+
 # Define a standard specificiation for what a model can support
 class ModelConfig:
     def __init__(self, 
                  supported_params: set, 
                  defaults: dict = None,
-                 transforms: dict = None):
+                 transforms: dict = None,
+                 key_mapping: dict = None,
+                 image_support: bool = False):
         self.supported_params = supported_params
         self.defaults = defaults or {}
         self.transforms = transforms or {}
+        self.key_mapping = key_mapping or {}
+        self.image_support = image_support
 
     def is_supported(self, param: str) -> bool:
         return param in self.supported_params
 
     def apply_transforms(self, params: dict) -> dict:
         new_params = params.copy()
+        
+        # Apply transforms (value changes)
         for key, transform in self.transforms.items():
             if key in new_params and new_params[key] is not None:
                 new_params[key] = transform(new_params[key])
-        return new_params
+        
+        # Apply key mappings (rename keys)
+        final_params = {}
+        for k, v in new_params.items():
+            if k in self.key_mapping:
+                final_params[self.key_mapping[k]] = v
+            else:
+                final_params[k] = v
+                
+        return final_params
 
 # Common sets of parameters
 # Most diffusion models support these
 STANDARD_DIFFUSION_PARAMS = {
     "width", "height", "fps", "steps", "guidance_scale", "seed", "negative_prompt", "output_format"
+}
+
+# Veo models have a specific set of parameters (no steps/guidance_scale)
+VEO_PARAMS = {
+    "width", "height", "fps", "seconds", "output_format", "output_quality", "prompt", "negative_prompt", "seed"
+}
+
+# Kling params (no steps, uses CFGScale)
+KLING_PARAMS = {
+    "width", "height", "fps", "seconds", "guidance_scale", "seed", "negative_prompt", "output_format", "output_quality"
 }
 
 # Configuration Registry
@@ -120,13 +147,24 @@ MODEL_REGISTRY = {
     ),
     "minimax/hailuo-02": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS | {"seconds"},
-        defaults={"fps": 30, "steps": 30, "guidance_scale": 7.5}
+        defaults={"fps": 30, "steps": 30, "guidance_scale": 7.5},
+        image_support=True
     ),
     "google/veo-2.0": ModelConfig(
-        supported_params=STANDARD_DIFFUSION_PARAMS,
+        supported_params=VEO_PARAMS,
+        transforms={"seconds": str},
+        image_support=True
+    ),
+    "google/veo-3.0": ModelConfig( 
+        supported_params=VEO_PARAMS,
+        transforms={"seconds": str},
+        image_support=True
     ),
     "kwaivgI/kling-2.1-master": ModelConfig(
-         supported_params=STANDARD_DIFFUSION_PARAMS, 
+         supported_params=KLING_PARAMS,
+         key_mapping={"guidance_scale": "CFGScale"},
+         transforms={"seconds": str},
+         image_support=True 
     ),
     "ByteDance/Seedance-1.0-pro": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS,
@@ -136,6 +174,7 @@ MODEL_REGISTRY = {
     ),
     "Wan-AI/Wan2.2-T2V-A14B": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS,
+        image_support=True
     ),
     "openai/sora-2-pro": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS,
@@ -147,6 +186,39 @@ DEFAULT_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
 
 def get_model_config(model_name: str) -> ModelConfig:
     return MODEL_REGISTRY.get(model_name, DEFAULT_CONFIG)
+
+def upload_image(uploaded_file):
+    """Save uploaded file temporarily, upload to Together, return ID"""
+    import tempfile
+    
+    try:
+        # Create temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp:
+            tmp.write(uploaded_file.getvalue())
+            tmp_path = tmp.name
+        
+        # Upload to Together - SDK expects a path string, not a file object
+        file_response = client.files.upload(file=tmp_path)
+            
+        # Cleanup
+        os.unlink(tmp_path)
+        
+        if hasattr(file_response, 'id'):
+             return file_response.id
+        elif isinstance(file_response, dict) and 'id' in file_response:
+             return file_response['id']
+        else:
+             st.error("Could not retrieve File ID from upload response.")
+             return None
+             
+    except Exception as e:
+        st.error(f"Image upload failed: {e}")
+        try:
+            if 'tmp_path' in locals():
+                os.unlink(tmp_path)
+        except:
+            pass
+        return None
 
 # --------------------------------------
 
@@ -215,10 +287,15 @@ with st.sidebar:
 # Main Input
 prompt = st.text_area("What would you like to see?", height=100, placeholder="A cinematic drone shot of a futuristic city at sunset...")
 
+# Image Input (If supported)
+if config.image_support:
+    st.markdown("### 🖼️ Reference Image")
+    st.info("Please provide a direct URL to an image (JPEG/PNG).")
+    image_url = st.text_input("Image URL", placeholder="https://example.com/image.png")
+    
 negative_prompt = None
 if config.is_supported("negative_prompt"):
     negative_prompt = st.text_input("Negative Prompt (Optional)", placeholder="blurry, low quality, distorted, watermark")
-
 
 # Generate Button
 if st.button("✨ Generate Video"):
@@ -237,6 +314,10 @@ if st.button("✨ Generate Video"):
                     "prompt": prompt,
                     **params # Unpack the dynamically built params dict
                 }
+                
+                # Handle Image Input
+                if config.image_support and image_url:
+                    create_args["reference_images"] = [image_url]
                 
                 if negative_prompt:
                     create_args["negative_prompt"] = negative_prompt
