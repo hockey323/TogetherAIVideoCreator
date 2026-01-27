@@ -345,6 +345,38 @@ if st.button("✨ Generate Video"):
                         if hasattr(status.outputs, 'video_url'):
                             st.video(status.outputs.video_url)
                             st.markdown(f"[⬇️ Download Video]({status.outputs.video_url})")
+
+                            # Auto-save to local path
+                            save_path = os.environ.get("VIDEO_OUTPUT_PATH")
+                            if save_path:
+                                try:
+                                    import requests
+                                    # Create directory if it doesn't exist
+                                    os.makedirs(save_path, exist_ok=True)
+                                    
+                                    # Generate filename: timestamp_model_prompt.mp4
+                                    timestamp = int(time.time())
+                                    # Safe prompt for filename (first 30 chars)
+                                    safe_prompt = "".join([c for c in prompt[:30] if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
+                                    ext = "mp4"
+                                    # Check output_format for extension if available
+                                    if "output_format" in create_args and str(create_args["output_format"]).lower() == "gif":
+                                        ext = "gif"
+                                        
+                                    filename = f"{timestamp}_{safe_prompt}.{ext}"
+                                    full_path = os.path.join(save_path, filename)
+                                    
+                                    # Download
+                                    with st.spinner(f"💾 Saving to {full_path}..."):
+                                        r = requests.get(status.outputs.video_url)
+                                        if r.status_code == 200:
+                                            with open(full_path, 'wb') as f:
+                                                f.write(r.content)
+                                            st.success(f"Saved locally: `{full_path}`")
+                                        else:
+                                            st.error(f"Failed to download video for auto-save: Status {r.status_code}")
+                                except Exception as save_err:
+                                    st.error(f"Auto-save failed: {save_err}")
                         
                         with st.expander("Usage & Metadata"):
                             st.json(status.model_dump())

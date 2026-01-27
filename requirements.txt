@@ -2,3 +2,4 @@ together
 streamlit
 python-dotenv
 watchdog
+requests
