@@ -136,49 +136,58 @@ KLING_PARAMS = {
     "width", "height", "fps", "seconds", "guidance_scale", "seed", "negative_prompt", "output_format", "output_quality"
 }
 
+# Seedance params (no steps, no negative prompt, no guidance scale)
+SEEDANCE_PARAMS = {
+    "width", "height", "fps", "seconds", "output_format", "output_quality", "prompt", "seed"
+}
+
 # Configuration Registry
 MODEL_REGISTRY = {
+    # Minimax
     "minimax/video-01-director": ModelConfig(
         supported_params={"width", "height", "fps", "seconds", "output_format", "output_quality", "prompt", "model"},
         defaults={"fps": 25, "width": 1280, "height": 720, "output_quality": 25},
-        transforms={
-            "seconds": str,
-        }
+        transforms={"seconds": str}
     ),
     "minimax/hailuo-02": ModelConfig(
         supported_params=STANDARD_DIFFUSION_PARAMS | {"seconds"},
         defaults={"fps": 30, "steps": 30, "guidance_scale": 7.5},
         image_support=True
     ),
-    "google/veo-2.0": ModelConfig(
-        supported_params=VEO_PARAMS,
-        transforms={"seconds": str},
-        image_support=True
-    ),
-    "google/veo-3.0": ModelConfig( 
-        supported_params=VEO_PARAMS,
-        transforms={"seconds": str},
-        image_support=True
-    ),
-    "kwaivgI/kling-2.1-master": ModelConfig(
-         supported_params=KLING_PARAMS,
-         key_mapping={"guidance_scale": "CFGScale"},
-         transforms={"seconds": str},
-         image_support=True 
-    ),
-    "ByteDance/Seedance-1.0-pro": ModelConfig(
-        supported_params=STANDARD_DIFFUSION_PARAMS,
-    ),
-    "pixverse/pixverse-v5": ModelConfig(
-        supported_params=STANDARD_DIFFUSION_PARAMS,
-    ),
-    "Wan-AI/Wan2.2-T2V-A14B": ModelConfig(
-        supported_params=STANDARD_DIFFUSION_PARAMS,
-        image_support=True
-    ),
-    "openai/sora-2-pro": ModelConfig(
-        supported_params=STANDARD_DIFFUSION_PARAMS,
-    )
+
+    # Google Veo
+    "google/veo-2.0": ModelConfig(supported_params=VEO_PARAMS, transforms={"seconds": str}, image_support=True),
+    "google/veo-3.0": ModelConfig(supported_params=VEO_PARAMS, transforms={"seconds": str}, image_support=True),
+    "google/veo-3.0-fast": ModelConfig(supported_params=VEO_PARAMS, transforms={"seconds": str}, image_support=True),
+    "google/veo-3.0-audio": ModelConfig(supported_params=VEO_PARAMS, transforms={"seconds": str}, image_support=True),
+    "google/veo-3.0-fast-audio": ModelConfig(supported_params=VEO_PARAMS, transforms={"seconds": str}, image_support=True),
+
+    # Kling
+    "kwaivgI/kling-2.1-master": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+    "kwaivgI/kling-2.1-pro": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+    "kwaivgI/kling-2.1-standard": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+    "kwaivgI/kling-2.0-master": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+    "kwaivgI/kling-1.6-pro": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+    "kwaivgI/kling-1.6-standard": ModelConfig(supported_params=KLING_PARAMS, key_mapping={"guidance_scale": "CFGScale"}, transforms={"seconds": str}, image_support=True),
+
+    # Seedance
+    "ByteDance/Seedance-1.0-pro": ModelConfig(supported_params=SEEDANCE_PARAMS, image_support=True, transforms={"seconds": str}),
+    "ByteDance/Seedance-1.0-lite": ModelConfig(supported_params=SEEDANCE_PARAMS, image_support=True, transforms={"seconds": str}),
+
+    # Wan
+    "Wan-AI/Wan2.2-T2V-A14B": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS, image_support=True),
+    "Wan-AI/Wan2.2-I2V-A14B": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS, image_support=True),
+
+    # PixVerse
+    "pixverse/pixverse-v5": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
+
+    # Sora
+    "openai/sora-2-pro": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
+    "openai/sora-2": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
+
+    # Vidu
+    "vidu/vidu-2.0": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS, image_support=True),
+    "vidu/vidu-q1": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS, image_support=True),
 }
 
 # Fallback for unknown models
