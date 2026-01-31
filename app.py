@@ -141,6 +141,11 @@ SEEDANCE_PARAMS = {
     "width", "height", "fps", "seconds", "output_format", "output_quality", "prompt", "seed"
 }
 
+# Sora params (no steps, no guidance scale, no seed, no negative prompt based on error)
+SORA_PARAMS = {
+    "width", "height", "fps", "seconds", "output_format", "output_quality", "prompt"
+}
+
 # Configuration Registry
 MODEL_REGISTRY = {
     # Minimax
@@ -182,8 +187,8 @@ MODEL_REGISTRY = {
     "pixverse/pixverse-v5": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
 
     # Sora
-    "openai/sora-2-pro": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
-    "openai/sora-2": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS),
+    "openai/sora-2-pro": ModelConfig(supported_params=SORA_PARAMS, transforms={"seconds": str}),
+    "openai/sora-2": ModelConfig(supported_params=SORA_PARAMS, transforms={"seconds": str}),
 
     # Vidu
     "vidu/vidu-2.0": ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS, image_support=True),
@@ -196,37 +201,16 @@ DEFAULT_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
 def get_model_config(model_name: str) -> ModelConfig:
     return MODEL_REGISTRY.get(model_name, DEFAULT_CONFIG)
 
-def upload_image(uploaded_file):
-    """Save uploaded file temporarily, upload to Together, return ID"""
-    import tempfile
-    
+def file_to_base64(uploaded_file):
+    """Convert uploaded file to base64 string"""
+    import base64
     try:
-        # Create temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp_path = tmp.name
-        
-        # Upload to Together - SDK expects a path string, not a file object
-        file_response = client.files.upload(file=tmp_path)
-            
-        # Cleanup
-        os.unlink(tmp_path)
-        
-        if hasattr(file_response, 'id'):
-             return file_response.id
-        elif isinstance(file_response, dict) and 'id' in file_response:
-             return file_response['id']
-        else:
-             st.error("Could not retrieve File ID from upload response.")
-             return None
-             
+        bytes_data = uploaded_file.getvalue()
+        base64_str = base64.b64encode(bytes_data).decode('utf-8')
+        mime_type = uploaded_file.type
+        return f"data:{mime_type};base64,{base64_str}"
     except Exception as e:
-        st.error(f"Image upload failed: {e}")
-        try:
-            if 'tmp_path' in locals():
-                os.unlink(tmp_path)
-        except:
-            pass
+        st.error(f"Failed to process image: {e}")
         return None
 
 # --------------------------------------
@@ -264,7 +248,7 @@ with st.sidebar:
     
     # Specific Video Params
     if config.is_supported("seconds"):
-        params["seconds"] = st.slider("Duration (Seconds)", 1, 10, 5)
+        params["seconds"] = st.slider("Duration (Seconds)", 1, 15, 5)
 
     if config.is_supported("fps"):
         params["fps"] = st.slider("FPS", 10, 60, config.defaults.get("fps", 25))
@@ -299,9 +283,15 @@ prompt = st.text_area("What would you like to see?", height=100, placeholder="A 
 # Image Input (If supported)
 if config.image_support:
     st.markdown("### 🖼️ Reference Image")
-    st.info("Please provide a direct URL to an image (JPEG/PNG).")
-    image_url = st.text_input("Image URL", placeholder="https://example.com/image.png")
     
+    image_tab1, image_tab2 = st.tabs(["Upload Image", "Image URL"])
+    
+    with image_tab1:
+        uploaded_file = st.file_uploader("Upload an image (PNG/JPG)", type=["png", "jpg", "jpeg"])
+    
+    with image_tab2:
+        image_url = st.text_input("Image URL", placeholder="https://example.com/image.png")
+
 negative_prompt = None
 if config.is_supported("negative_prompt"):
     negative_prompt = st.text_input("Negative Prompt (Optional)", placeholder="blurry, low quality, distorted, watermark")
@@ -312,8 +302,9 @@ if st.button("✨ Generate Video"):
         st.warning("Please enter a prompt first.")
     else:
         # Clear previous error
-        if "last_error" in st.session_state:
-            del st.session_state["last_error"]
+        for key in ["last_error", "last_failed_job"]:
+            if key in st.session_state:
+                del st.session_state[key]
             
         try:
             with st.spinner("🎨 Creating your masterpiece... This may take a few minutes."):
@@ -325,8 +316,15 @@ if st.button("✨ Generate Video"):
                 }
                 
                 # Handle Image Input
-                if config.image_support and image_url:
-                    create_args["reference_images"] = [image_url]
+                if config.image_support:
+                    if uploaded_file:
+                        # Convert upload to base64
+                        b64_image = file_to_base64(uploaded_file)
+                        if b64_image:
+                            create_args["reference_images"] = [b64_image]
+                    elif image_url:
+                        # Use URL directly
+                        create_args["reference_images"] = [image_url]
                 
                 if negative_prompt:
                     create_args["negative_prompt"] = negative_prompt
@@ -394,6 +392,8 @@ if st.button("✨ Generate Video"):
                     elif status.status == "failed":
                         error_msg = status.error if hasattr(status, 'error') else "Unknown error"
                         st.session_state["last_error"] = f"Generation Failed: {error_msg}"
+                        # Store the full JSON dump for debugging "providerError" etc
+                        st.session_state["last_failed_job"] = status.model_dump()
                         break
                     
                     elif status.status in ["queued", "in_progress"]:
@@ -411,6 +411,10 @@ if st.button("✨ Generate Video"):
 # Display Persistent Error
 if "last_error" in st.session_state:
     st.error(st.session_state["last_error"])
+    if "last_failed_job" in st.session_state:
+        with st.expander("🔍 Detailed Error Metadata (JSON)"):
+            st.json(st.session_state["last_failed_job"])
+
 
 # Footer
 st.markdown("---")
