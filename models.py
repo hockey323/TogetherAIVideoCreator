@@ -196,39 +196,39 @@ IMAGE_MODEL_REGISTRY = {
         transforms={"reference_images": lambda x: x[0] if isinstance(x, list) and x else x}
     ),
     "google/gemini-2.5-flash-image": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 768, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 768},
         image_support=True
     ),
     "google/gemini-3-pro-image-preview": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 768, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 768},
         image_support=True
     ),
     "NanoBanana/NanoBanana-v1": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 768, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 768},
         image_support=True
     ),
     "google/flash-image-2.5": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 768, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 768},
         image_support=True
     ),
     "google/imagen-3.0": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 1024, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 1024},
         image_support=True
     ),
     "google/imagen-4.0-preview": ModelConfig(
-        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
-        defaults={"width": 1024, "height": 1024, "steps": 20},
+        supported_params={"width", "height", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 1024},
         image_support=True
     ),
 }
 
 DEFAULT_VIDEO_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
-DEFAULT_IMAGE_CONFIG = ModelConfig(supported_params={"width", "height", "steps", "seed", "prompt"})
+DEFAULT_IMAGE_CONFIG = ModelConfig(supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"})
 
 def get_video_model_config(model_name: str) -> ModelConfig:
     return VIDEO_MODEL_REGISTRY.get(model_name, DEFAULT_VIDEO_CONFIG)
@@ -242,6 +242,15 @@ def get_image_model_config(model_name: str) -> ModelConfig:
     for key, config in IMAGE_MODEL_REGISTRY.items():
         if key in model_name or model_id_clean(key) in model_id_clean(model_name):
             return config
+            
+    # Automatic detection for certain providers/families
+    low_name = model_name.lower()
+    if any(x in low_name for x in ["google/", "gemini", "imagen", "nanobanana"]):
+        return ModelConfig(
+            supported_params={"width", "height", "seed", "prompt", "reference_images"},
+            defaults={"width": 1024, "height": 768},
+            image_support=True
+        )
             
     return DEFAULT_IMAGE_CONFIG
 
