@@ -9,7 +9,7 @@ from models import get_image_model_config
 from utils import file_to_base64
 
 def format_image_model_label(model_id: str) -> str:
-    if "gemini" in model_id.lower() or "nanobanana" in model_id.lower():
+    if any(x in model_id.lower() for x in ["gemini", "nanobanana", "imagen"]):
         return f"🍌 Nano Banana ({model_id})"
     return model_id
 
@@ -79,12 +79,9 @@ def handle_image_generation(prompt, selected_model, params, config, uploaded_fil
                 if uploaded_file:
                     b64_image = file_to_base64(uploaded_file)
                     if b64_image:
-                        # Together Image-to-Image usually expects 'image' or 'input_image'
-                        # but some models might use different keys. 
-                        # We'll use 'image' as a standard for now.
-                        create_args["image"] = b64_image
+                        create_args["reference_images"] = [b64_image]
                 elif image_url:
-                    create_args["image"] = image_url
+                    create_args["reference_images"] = [image_url]
 
             if negative_prompt and config.is_supported("negative_prompt"):
                 create_args["negative_prompt"] = negative_prompt

@@ -25,27 +25,18 @@ class ModelConfig:
         core_allowed = {"model", "prompt"}
         allowed_keys = core_allowed | self.supported_params
         
-        # STEP 1: Apply key mappings first (e.g., guidance_scale -> CFGScale)
+        # STEP 1: Apply key mappings first
         mapped_params = {}
         for k, v in raw_params.items():
             dest_key = self.key_mapping.get(k, k)
             mapped_params[dest_key] = v
         
-        # STEP 2: Apply value transforms (e.g., seconds -> str, images -> wrapped format)
+        # STEP 2: Apply value transforms
         for key, transform in self.transforms.items():
-            # Check both original and mapped key names
+            # Check original key
             if key in mapped_params and mapped_params[key] is not None:
                 mapped_params[key] = transform(mapped_params[key])
-            # Also check if the mapped version of the key exists
-            mapped_key = self.key_mapping.get(key, key)
-            if mapped_key != key and mapped_key in mapped_params and mapped_params[mapped_key] is not None:
-                mapped_params[mapped_key] = transform(mapped_key_params_check(mapped_params, mapped_key, transform))
-                # Wait, the original logic was a bit complex. Let's keep it consistent.
-                
-        # Re-implementing the original apply_transforms logic exactly
-        for key, transform in self.transforms.items():
-            if key in mapped_params and mapped_params[key] is not None:
-                mapped_params[key] = transform(mapped_params[key])
+            # Check mapped key
             mapped_key = self.key_mapping.get(key, key)
             if mapped_key != key and mapped_key in mapped_params and mapped_params[mapped_key] is not None:
                 mapped_params[mapped_key] = transform(mapped_params[mapped_key])
@@ -53,7 +44,6 @@ class ModelConfig:
         # STEP 3: Filter to only allowed parameters
         final_params = {}
         for k, v in mapped_params.items():
-            # Check if original key was allowed
             original_key = next((orig for orig, mapped in self.key_mapping.items() if mapped == k), k)
             if k in allowed_keys or original_key in allowed_keys or k in core_allowed:
                 final_params[k] = v
@@ -113,6 +103,7 @@ VIDEO_MODEL_REGISTRY = {
     "google/veo-3.0-fast": ModelConfig(supported_params=VEO_PARAMS, defaults={"seconds": 8}, transforms={"seconds": str}, image_support=True),
     "google/veo-3.0-audio": ModelConfig(supported_params=VEO_PARAMS, defaults={"seconds": 8}, transforms={"seconds": str}, image_support=True),
     "google/veo-3.0-fast-audio": ModelConfig(supported_params=VEO_PARAMS, defaults={"seconds": 8}, transforms={"seconds": str}, image_support=True),
+    "google/veo-3.1": ModelConfig(supported_params=VEO_PARAMS, defaults={"seconds": 8}, transforms={"seconds": str}, image_support=True),
     # Kling
     "kwaivgI/kling-2.1-master": ModelConfig(
         supported_params=KLING_2_1_PARAMS, 
@@ -219,6 +210,21 @@ IMAGE_MODEL_REGISTRY = {
         defaults={"width": 1024, "height": 768, "steps": 20},
         image_support=True
     ),
+    "google/flash-image-2.5": ModelConfig(
+        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 768, "steps": 20},
+        image_support=True
+    ),
+    "google/imagen-3.0": ModelConfig(
+        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 1024, "steps": 20},
+        image_support=True
+    ),
+    "google/imagen-4.0-preview": ModelConfig(
+        supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"},
+        defaults={"width": 1024, "height": 1024, "steps": 20},
+        image_support=True
+    ),
 }
 
 DEFAULT_VIDEO_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
@@ -228,4 +234,16 @@ def get_video_model_config(model_name: str) -> ModelConfig:
     return VIDEO_MODEL_REGISTRY.get(model_name, DEFAULT_VIDEO_CONFIG)
 
 def get_image_model_config(model_name: str) -> ModelConfig:
-    return IMAGE_MODEL_REGISTRY.get(model_name, DEFAULT_IMAGE_CONFIG)
+    # Try exact match first
+    if model_name in IMAGE_MODEL_REGISTRY:
+        return IMAGE_MODEL_REGISTRY[model_name]
+    
+    # Try fuzzy match (if model name contains registry key or vice versa)
+    for key, config in IMAGE_MODEL_REGISTRY.items():
+        if key in model_name or model_id_clean(key) in model_id_clean(model_name):
+            return config
+            
+    return DEFAULT_IMAGE_CONFIG
+
+def model_id_clean(model_id: str) -> str:
+    return model_id.lower().split('/')[-1]
