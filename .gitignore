@@ -19,3 +19,6 @@ __pycache__/
 images/
 videos/
 pending_jobs.json
+
+# Debug scripts
+debug_models.py

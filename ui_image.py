@@ -5,12 +5,16 @@ import os
 import requests
 import base64
 from api_client import client, fetch_available_models
-from models import get_image_model_config
+from models import get_image_model_config, IMAGE_MODEL_REGISTRY
 from utils import file_to_base64
 
 def format_image_model_label(model_id: str) -> str:
-    if any(x in model_id.lower() for x in ["gemini", "nanobanana", "imagen"]):
-        return f"🍌 Nano Banana ({model_id})"
+    config = get_image_model_config(model_id)
+    low = model_id.lower()
+    if "nanobanana" in low:
+        return f"🍌 {model_id}"
+    elif config.image_support:
+        return f"🖼️ {model_id}"
     return model_id
 
 def render_image_sidebar():
@@ -123,7 +127,7 @@ def auto_save_image(data, prompt, selected_model, data_type):
             full_path = os.path.join(save_path, filename)
             
             if data_type == "url":
-                r = requests.get(data)
+                r = requests.get(data, timeout=60)
                 if r.status_code == 200:
                     with open(full_path, 'wb') as f:
                         f.write(r.content)

@@ -1,52 +1,86 @@
+# Together AI Studio
 
-# Together AI Video Generator
-
-This project allows you to generate videos using Together AI's serverless models through a beautiful Streamlit interface.
-
-## Setup
-
-1.  **Install Dependencies**: A virtual environment has been created and dependencies installed.
-    If you need to reinstall:
-    ```powershell
-    python -m venv venv
-    .\venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    ```
-
-2.  **API Key**: The API key is configured in the `.env` file. Refrain from sharing this file if you push to a public repository.
-
-## Running the App
-
-To start the video generator, simply run the `run.ps1` script in PowerShell:
-
-```powershell
-.\run.ps1
-```
-
-Or manually:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-streamlit run app.py
-```
+A Streamlit-based application for generating **videos** and **images** using [Together AI](https://www.together.ai/) serverless models. Features a modern dark-themed UI with support for 30+ models from Google, OpenAI, Kling, ByteDance, and more.
 
 ## Features
 
--   **Model Selection**: Choose from various video models like `minimax/video-01-director`, `google/veo-2.0`, and more.
--   **Custom Parameters**: Adjust resolution, FPS, steps, and guidance scale.
--   **Modern UI**: Dark-themed interface with custom styling.
--   **Download**: Direct download link for generated videos.
+- **🎬 Video Studio** — Generate videos with models like Veo 3.1, Sora 2, Kling 2.1, Seedance, and more
+- **🎨 Image Studio** — Generate images with FLUX, Gemini, Imagen, NanoBanana, and others
+- **🖼️ Image-to-Video / Image-to-Image** — Use a reference image as input for supported models
+- **⚙️ Dynamic Parameters** — UI adjusts automatically based on each model's supported parameters
+- **💾 Auto-Save** — Optionally save generated media to a local directory
+- **📋 Job Queue** — Track and retrieve long-running video generation jobs
 
-## Auto-Save
+## Quick Start
 
-The application can automatically save generated images and videos to your local machine. This is configured via environment variables in the `.env` file:
+### 1. Clone the Repository
 
--   `VIDEO_OUTPUT_PATH`: Directory where generated videos will be saved (e.g., `D:\Videos\TogetherAI`).
--   `IMAGE_OUTPUT_PATH`: Directory where generated images will be saved (e.g., `D:\Images\TogetherAI`).
+```bash
+git clone https://github.com/hockey323/TogetherAIVideoCreator.git
+cd TogetherAIVideoCreator
+```
 
-If these variables are not set, the application will not automatically save the files.
+### 2. Set Up a Virtual Environment
+
+```bash
+python -m venv venv
+
+# Linux/macOS
+source venv/bin/activate
+
+# Windows (PowerShell)
+.\venv\Scripts\Activate.ps1
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure Environment Variables
+
+Copy the example file and add your API key:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and replace `your_api_key_here` with your [Together AI API key](https://api.together.ai/):
+
+```
+TOGETHER_API_KEY=your_actual_key_here
+```
+
+### 5. Run the App
+
+```bash
+streamlit run app.py
+```
+
+## Configuration
+
+All configuration is done via the `.env` file:
+
+| Variable | Required | Description |
+|---|---|---|
+| `TOGETHER_API_KEY` | ✅ Yes | Your Together AI API key |
+| `VIDEO_OUTPUT_PATH` | No | Directory to auto-save generated videos |
+| `IMAGE_OUTPUT_PATH` | No | Directory to auto-save generated images |
+
+## Supported Models
+
+### Video Models
+Google Veo (2.0, 3.0, 3.1), OpenAI Sora 2, Kling (1.6–2.1), ByteDance Seedance, Minimax, Wan-AI, PixVerse, Vidu, and more.
+
+### Image Models
+FLUX.1 (Schnell, Dev), Google Gemini, Imagen (3.0, 4.0), NanoBanana, and more.
 
 ## Notes
 
--   The generated videos and images are hosted by Together AI temporarily. Download them or use auto-save if you wish to keep them.
--   Check the [Together AI Documentation](https://docs.together.ai/docs/serverless-models#video-models) for meaningful parameter ranges for specific models.
+- Generated media is hosted temporarily by Together AI — use the download button or auto-save to keep your files.
+- See the [Together AI Documentation](https://docs.together.ai/docs/serverless-models) for details on model parameters and pricing.
+
+## License
+
+MIT

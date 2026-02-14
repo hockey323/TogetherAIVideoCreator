@@ -2,6 +2,7 @@
 import streamlit as st
 import time
 import os
+import math
 import requests
 from api_client import client, fetch_available_models
 from models import get_video_model_config
@@ -165,8 +166,7 @@ def handle_video_generation(prompt, selected_model, params, config, uploaded_fil
 
                 create_args = config.apply_transforms(create_args)
 
-                st.write("**Debug - Parameters being sent to API:**")
-                st.json(create_args)
+
 
                 start_time = time.time()
                 job = client.videos.create(**create_args)
@@ -201,7 +201,6 @@ def handle_video_generation(prompt, selected_model, params, config, uploaded_fil
                             st.session_state["last_failed_job"] = status.model_dump()
                             break
                         status_placeholder.info(f"Status: {status.status.replace('_', ' ').title()}... ({elapsed:.1f}s)")
-                        import math
                         prog = min(90, int(math.log(elapsed + 1) * 15))
                         progress_bar.progress(prog)
                     time.sleep(3)
@@ -222,7 +221,7 @@ def auto_save_video(video_url, prompt, selected_model, create_args):
             full_path = os.path.join(save_path, filename)
             
             with st.spinner(f"💾 Saving to {full_path}..."):
-                r = requests.get(video_url)
+                r = requests.get(video_url, timeout=60)
                 if r.status_code == 200:
                     with open(full_path, 'wb') as f:
                         f.write(r.content)
