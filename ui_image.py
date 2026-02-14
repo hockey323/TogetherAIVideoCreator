@@ -18,7 +18,7 @@ def format_image_model_label(model_id: str) -> str:
     return model_id
 
 def render_image_sidebar():
-    st.header("🎨 Image Configuration")
+    st.markdown('<div class="section-label"><span>🤖</span> MODEL</div>', unsafe_allow_html=True)
     
     model_options = fetch_available_models(model_type='image')
     
@@ -31,18 +31,19 @@ def render_image_sidebar():
         model_options, 
         index=default_index,
         format_func=format_image_model_label,
-        key="selected_image_model_selector"
+        key="selected_image_model_selector",
+        label_visibility="collapsed"
     )
     st.session_state.selected_image_model = selected_model
     
-    if st.button("🔄 Refresh Image Models"):
+    if st.button("↻ Refresh Models", key="refresh_image"):
         st.cache_data.clear()
         st.rerun()
     
     config = get_image_model_config(selected_model)
     
-    st.markdown("---")
-    st.subheader("Image Settings")
+    # ── Resolution ──
+    st.markdown('<div class="section-label"><span>📐</span> OUTPUT</div>', unsafe_allow_html=True)
     
     params = {}
     col1, col2 = st.columns(2)
@@ -53,16 +54,21 @@ def render_image_sidebar():
         if config.is_supported("height"):
             params["height"] = st.number_input("Height", min_value=256, max_value=2048, value=config.defaults.get("height", 768), step=64, key="i_height")
     
-    if config.is_supported("steps"):
-        params["steps"] = st.slider("Steps", 1, 100, config.defaults.get("steps", 20), key="i_steps")
-    
-    if config.is_supported("guidance_scale"):
-        params["guidance_scale"] = st.slider("Guidance Scale", 1.0, 20.0, config.defaults.get("guidance_scale", 7.5), key="i_guidance")
-    
-    if config.is_supported("seed"):
-        seed_val = st.number_input("Seed (0 = Random)", value=0, min_value=0, key="i_seed")
-        if seed_val > 0:
-            params["seed"] = seed_val
+    # ── Advanced ──
+    has_advanced = any(config.is_supported(p) for p in ["steps", "guidance_scale", "seed"])
+    if has_advanced:
+        st.markdown('<div class="section-label"><span>⚙️</span> ADVANCED</div>', unsafe_allow_html=True)
+        
+        if config.is_supported("steps"):
+            params["steps"] = st.slider("Steps", 1, 100, config.defaults.get("steps", 20), key="i_steps")
+        
+        if config.is_supported("guidance_scale"):
+            params["guidance_scale"] = st.slider("Guidance Scale", 1.0, 20.0, config.defaults.get("guidance_scale", 7.5), key="i_guidance")
+        
+        if config.is_supported("seed"):
+            seed_val = st.number_input("Seed (0 = random)", value=0, min_value=0, key="i_seed")
+            if seed_val > 0:
+                params["seed"] = seed_val
             
     return selected_model, params, config
 
@@ -72,7 +78,7 @@ def handle_image_generation(prompt, selected_model, params, config, uploaded_fil
         return
 
     try:
-        with st.spinner("🎨 Creating your image..."):
+        with st.spinner("Generating image…"):
             create_args = {
                 "model": selected_model,
                 "prompt": prompt,
@@ -90,22 +96,19 @@ def handle_image_generation(prompt, selected_model, params, config, uploaded_fil
             if negative_prompt and config.is_supported("negative_prompt"):
                 create_args["negative_prompt"] = negative_prompt
             
-            # Apply any registered transforms if they exist in models.py (though less likely for images right now)
             create_args = config.apply_transforms(create_args)
 
-            # NOTE: Together AI Image API is currently synchronous (returns base64/url directly)
             response = client.images.generate(**create_args)
             
             if response and response.data:
                 image_data = response.data[0]
                 
-                # Display Image
                 if hasattr(image_data, 'url') and image_data.url:
-                    st.image(image_data.url)
+                    st.image(image_data.url, use_container_width=True)
                     st.markdown(f"[⬇️ Download Image]({image_data.url})")
                     auto_save_image(image_data.url, prompt, selected_model, "url")
                 elif hasattr(image_data, 'b64_json') and image_data.b64_json:
-                    st.image(f"data:image/png;base64,{image_data.b64_json}")
+                    st.image(f"data:image/png;base64,{image_data.b64_json}", use_container_width=True)
                     auto_save_image(image_data.b64_json, prompt, selected_model, "base64")
                 
                 with st.expander("Metadata"):
@@ -131,10 +134,10 @@ def auto_save_image(data, prompt, selected_model, data_type):
                 if r.status_code == 200:
                     with open(full_path, 'wb') as f:
                         f.write(r.content)
-                    st.success(f"Saved locally: `{full_path}`")
+                    st.success(f"Saved: `{full_path}`")
             elif data_type == "base64":
                 with open(full_path, 'wb') as f:
                     f.write(base64.b64decode(data))
-                st.success(f"Saved locally: `{full_path}`")
+                st.success(f"Saved: `{full_path}`")
         except Exception as save_err:
             st.error(f"Auto-save failed: {save_err}")

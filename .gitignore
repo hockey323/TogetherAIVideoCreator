@@ -22,3 +22,6 @@ pending_jobs.json
 
 # Debug scripts
 debug_models.py
+
+# Streamlit config (local theme preferences)
+.streamlit/
