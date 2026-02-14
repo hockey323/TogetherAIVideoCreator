@@ -37,7 +37,16 @@ streamlit run app.py
 -   **Modern UI**: Dark-themed interface with custom styling.
 -   **Download**: Direct download link for generated videos.
 
+## Auto-Save
+
+The application can automatically save generated images and videos to your local machine. This is configured via environment variables in the `.env` file:
+
+-   `VIDEO_OUTPUT_PATH`: Directory where generated videos will be saved (e.g., `D:\Videos\TogetherAI`).
+-   `IMAGE_OUTPUT_PATH`: Directory where generated images will be saved (e.g., `D:\Images\TogetherAI`).
+
+If these variables are not set, the application will not automatically save the files.
+
 ## Notes
 
--   The generated videos are hosted by Together AI temporarily. Download them if you wish to keep them.
+-   The generated videos and images are hosted by Together AI temporarily. Download them or use auto-save if you wish to keep them.
 -   Check the [Together AI Documentation](https://docs.together.ai/docs/serverless-models#video-models) for meaningful parameter ranges for specific models.

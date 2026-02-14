@@ -113,23 +113,24 @@ def handle_image_generation(prompt, selected_model, params, config, uploaded_fil
         st.error(f"Image generation failed: {str(e)}")
 
 def auto_save_image(data, prompt, selected_model, data_type):
-    save_path = os.environ.get("IMAGE_OUTPUT_PATH", "./images")
-    try:
-        os.makedirs(save_path, exist_ok=True)
-        timestamp = int(time.time())
-        safe_prompt = "".join([c for c in prompt[:30] if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
-        filename = f"{timestamp}_{safe_prompt}.png"
-        full_path = os.path.join(save_path, filename)
-        
-        if data_type == "url":
-            r = requests.get(data)
-            if r.status_code == 200:
+    save_path = os.environ.get("IMAGE_OUTPUT_PATH")
+    if save_path:
+        try:
+            os.makedirs(save_path, exist_ok=True)
+            timestamp = int(time.time())
+            safe_prompt = "".join([c for c in prompt[:30] if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
+            filename = f"{timestamp}_{safe_prompt}.png"
+            full_path = os.path.join(save_path, filename)
+            
+            if data_type == "url":
+                r = requests.get(data)
+                if r.status_code == 200:
+                    with open(full_path, 'wb') as f:
+                        f.write(r.content)
+                    st.success(f"Saved locally: `{full_path}`")
+            elif data_type == "base64":
                 with open(full_path, 'wb') as f:
-                    f.write(r.content)
+                    f.write(base64.b64decode(data))
                 st.success(f"Saved locally: `{full_path}`")
-        elif data_type == "base64":
-            with open(full_path, 'wb') as f:
-                f.write(base64.b64decode(data))
-            st.success(f"Saved locally: `{full_path}`")
-    except Exception as save_err:
-        st.error(f"Auto-save failed: {save_err}")
+        except Exception as save_err:
+            st.error(f"Auto-save failed: {save_err}")
