@@ -228,7 +228,7 @@ IMAGE_MODEL_REGISTRY = {
 }
 
 DEFAULT_VIDEO_CONFIG = ModelConfig(supported_params=STANDARD_DIFFUSION_PARAMS)
-DEFAULT_IMAGE_CONFIG = ModelConfig(supported_params={"width", "height", "steps", "seed", "prompt", "reference_images"})
+DEFAULT_IMAGE_CONFIG = ModelConfig(supported_params={"width", "height", "seed", "prompt", "reference_images"})
 
 def get_video_model_config(model_name: str) -> ModelConfig:
     return VIDEO_MODEL_REGISTRY.get(model_name, DEFAULT_VIDEO_CONFIG)
@@ -245,13 +245,17 @@ def get_image_model_config(model_name: str) -> ModelConfig:
             
     # Automatic detection for certain providers/families
     low_name = model_name.lower()
+    
+    # Google/Imagen/Gemini/NanoBanana usually don't support 'steps'
     if any(x in low_name for x in ["google/", "gemini", "imagen", "nanobanana"]):
         return ModelConfig(
             supported_params={"width", "height", "seed", "prompt", "reference_images"},
             defaults={"width": 1024, "height": 768},
             image_support=True
         )
-            
+    
+    # FLUX models usually support steps, but let's be safe and only enable for known ones in the registry
+    # For everything else, use the conservative default
     return DEFAULT_IMAGE_CONFIG
 
 def model_id_clean(model_id: str) -> str:
