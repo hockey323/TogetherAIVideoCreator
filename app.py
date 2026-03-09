@@ -9,6 +9,8 @@ load_dotenv()
 # Import local modules
 from ui_video import render_video_sidebar, handle_video_generation
 from ui_image import render_image_sidebar, handle_image_generation
+from ui_jobs import render_jobs_dashboard, poll_pending_jobs
+from job_manager import init_jobs, pending_count
 
 # Set page config
 st.set_page_config(
@@ -551,12 +553,59 @@ st.markdown("""
         text-transform: uppercase;
     }
 
+    /* ═══ JOB CARDS ═══ */
+    .job-card-header {
+        background: var(--md-sys-color-surface-container);
+        border: 1px solid var(--md-sys-color-outline-variant);
+        border-radius: var(--md-shape-medium);
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.5rem;
+    }
+    .job-card-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--md-sys-color-on-surface);
+        margin-bottom: 0.35rem;
+    }
+    .job-card-meta {
+        font-size: 0.8rem;
+        color: var(--md-sys-color-on-surface-variant);
+        line-height: 1.4;
+    }
+    .job-status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 2px 10px;
+        border-radius: var(--md-shape-full);
+        margin-left: 4px;
+    }
+    .poll-indicator {
+        font-size: 0.7rem;
+        color: var(--md-sys-color-on-surface-muted);
+        text-align: center;
+        padding: 0.25rem 0;
+        opacity: 0.6;
+    }
+
     /* ═══ HIDE STREAMLIT BRANDING ═══ */
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
     [data-testid="stToolbar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────
+# INIT
+# ─────────────────────────────────────────────────────────────────
+init_jobs()
 
 # ─────────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -569,10 +618,28 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
+    _modes = ["🎬 Video", "🎨 Image", "📋 Jobs"]
+
+    # Resolve default index — handle dynamic badge labels like "📋 Jobs (3)"
+    _default = 0
+    if "active_tab" in st.session_state:
+        _prev = st.session_state.active_tab
+        if _prev in _modes:
+            _default = _modes.index(_prev)
+        elif _prev.startswith("📋 Jobs"):
+            _default = 2  # Jobs tab
+        elif _prev.startswith("🎨 Image"):
+            _default = 1
+
+    # Show pending count badge next to Jobs label
+    _n_pending = pending_count()
+    if _n_pending > 0:
+        _modes[2] = f"📋 Jobs ({_n_pending})"
+
     app_mode = st.radio(
         "Mode",
-        ["🎬 Video", "🎨 Image"],
-        index=0 if "active_tab" not in st.session_state or st.session_state.active_tab == "🎬 Video" else 1,
+        _modes,
+        index=_default,
         label_visibility="collapsed"
     )
     st.session_state.active_tab = app_mode
@@ -626,17 +693,10 @@ if app_mode == "🎬 Video":
     if st.button("✦  Generate Video", key="v_gen_btn"):
         handle_video_generation(prompt, selected_model, params, config, uploaded_file, image_url, negative_prompt)
 
-    # Persistent Error Display
-    if "last_error" in st.session_state:
-        st.error(st.session_state["last_error"])
-        if "last_failed_job" in st.session_state:
-            with st.expander("Error Details"):
-                st.json(st.session_state["last_failed_job"])
-
 # ─────────────────────────────────────────────────────────────────
 # MAIN CONTENT — IMAGE MODE
 # ─────────────────────────────────────────────────────────────────
-else:
+elif app_mode == "🎨 Image":
     with st.sidebar:
         selected_model_img, params_img, config_img = render_image_sidebar()
 
@@ -680,6 +740,17 @@ else:
     st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
     if st.button("✦  Generate Image", key="i_gen_btn"):
         handle_image_generation(prompt_img, selected_model_img, params_img, config_img, uploaded_file_img, image_url_img, neg_prompt_img)
+
+# ─────────────────────────────────────────────────────────────────
+# MAIN CONTENT — JOBS DASHBOARD
+# ─────────────────────────────────────────────────────────────────
+else:
+    render_jobs_dashboard()
+
+# ─────────────────────────────────────────────────────────────────
+# BACKGROUND POLLER (runs on every tab)
+# ─────────────────────────────────────────────────────────────────
+poll_pending_jobs()
 
 # ─────────────────────────────────────────────────────────────────
 # FOOTER
