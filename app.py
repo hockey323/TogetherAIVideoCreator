@@ -92,7 +92,9 @@ st.markdown("""
             radial-gradient(ellipse 70% 50% at 50% -10%, rgba(77, 182, 172, 0.06) 0%, transparent 65%),
             var(--md-sys-color-background) !important;
     }
-    * { font-family: var(--md-font) !important; }
+    html, body, .stApp, [data-testid="stAppViewContainer"], .stMarkdown, p, span, label, input, textarea, button, select {
+        font-family: var(--md-font) !important;
+    }
 
     /* ═══ CUSTOM SCROLLBAR ═══ */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -386,6 +388,9 @@ st.markdown("""
         color: var(--md-sys-color-on-surface-variant) !important;
         font-weight: 500 !important;
         font-size: 0.875rem !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
     }
     [data-testid="stExpander"] summary:hover {
         color: var(--md-sys-color-on-surface) !important;
