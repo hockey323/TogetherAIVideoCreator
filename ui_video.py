@@ -51,13 +51,18 @@ def render_video_sidebar():
     }
     
     # Try to determine which ratio is currently active
-    curr_w = st.session_state.get("v_width", config.defaults.get("width", 1280))
-    curr_h = st.session_state.get("v_height", config.defaults.get("height", 720))
-    default_ratio_idx = 4 # Default to Custom
-    for i, (label, dims) in enumerate(aspect_ratios.items()):
-        if dims == (curr_w, curr_h):
-            default_ratio_idx = i
-            break
+    curr_w = st.session_state.get("saved_v_width", config.defaults.get("width", 1280))
+    curr_h = st.session_state.get("saved_v_height", config.defaults.get("height", 720))
+    
+    saved_ratio = st.session_state.get("saved_v_ratio")
+    if saved_ratio in aspect_ratios:
+        default_ratio_idx = list(aspect_ratios.keys()).index(saved_ratio)
+    else:
+        default_ratio_idx = 4 # Default to Custom
+        for i, (label, dims) in enumerate(aspect_ratios.items()):
+            if dims == (curr_w, curr_h):
+                default_ratio_idx = i
+                break
 
     selected_ratio = st.radio(
         "Select Aspect Ratio",
@@ -67,19 +72,24 @@ def render_video_sidebar():
         horizontal=True,
         label_visibility="collapsed"
     )
+    st.session_state.saved_v_ratio = selected_ratio
 
     params = {}
     if selected_ratio != "Custom":
         params["width"], params["height"] = aspect_ratios[selected_ratio]
+        st.session_state.saved_v_width = params["width"]
+        st.session_state.saved_v_height = params["height"]
         st.caption(f"Selected: **{params['width']} × {params['height']}**")
     else:
         col1, col2 = st.columns(2)
         with col1:
             if config.is_supported("width"):
                 params["width"] = st.number_input("Width", min_value=256, max_value=2048, value=curr_w, step=64, key="v_width")
+                st.session_state.saved_v_width = params["width"]
         with col2:
             if config.is_supported("height"):
                 params["height"] = st.number_input("Height", min_value=256, max_value=2048, value=curr_h, step=64, key="v_height")
+                st.session_state.saved_v_height = params["height"]
     
     if config.is_supported("seconds"):
         if "kling" in selected_model.lower():

@@ -7,7 +7,10 @@ import base64
 from api_client import client, fetch_available_models
 from models import get_image_model_config, IMAGE_MODEL_REGISTRY
 from utils import file_to_base64
-from job_manager import add_job
+from job_manager import add_job, update_job
+import threading
+import uuid
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 
 def format_image_model_label(model_id: str) -> str:
@@ -57,13 +60,18 @@ def render_image_sidebar():
     }
     
     # Try to determine which ratio is currently active
-    curr_w = st.session_state.get("i_width", config.defaults.get("width", 1024))
-    curr_h = st.session_state.get("i_height", config.defaults.get("height", 1024))
-    default_ratio_idx = 4 # Default to Custom
-    for i, (label, dims) in enumerate(aspect_ratios.items()):
-        if dims == (curr_w, curr_h):
-            default_ratio_idx = i
-            break
+    curr_w = st.session_state.get("saved_i_width", config.defaults.get("width", 1024))
+    curr_h = st.session_state.get("saved_i_height", config.defaults.get("height", 1024))
+    
+    saved_ratio = st.session_state.get("saved_i_ratio")
+    if saved_ratio in aspect_ratios:
+        default_ratio_idx = list(aspect_ratios.keys()).index(saved_ratio)
+    else:
+        default_ratio_idx = 4 # Default to Custom
+        for i, (label, dims) in enumerate(aspect_ratios.items()):
+            if dims == (curr_w, curr_h):
+                default_ratio_idx = i
+                break
 
     selected_ratio = st.radio(
         "Select Aspect Ratio",
@@ -73,19 +81,24 @@ def render_image_sidebar():
         horizontal=True,
         label_visibility="collapsed"
     )
+    st.session_state.saved_i_ratio = selected_ratio
 
     params = {}
     if selected_ratio != "Custom":
         params["width"], params["height"] = aspect_ratios[selected_ratio]
+        st.session_state.saved_i_width = params["width"]
+        st.session_state.saved_i_height = params["height"]
         st.caption(f"Selected: **{params['width']} × {params['height']}**")
     else:
         col1, col2 = st.columns(2)
         with col1:
             if config.is_supported("width"):
                 params["width"] = st.number_input("Width", min_value=256, max_value=2048, value=curr_w, step=64, key="i_width")
+                st.session_state.saved_i_width = params["width"]
         with col2:
             if config.is_supported("height"):
                 params["height"] = st.number_input("Height", min_value=256, max_value=2048, value=curr_h, step=64, key="i_height")
+                st.session_state.saved_i_height = params["height"]
     
     # ── Advanced ──
     has_advanced = any(config.is_supported(p) for p in ["steps", "guidance_scale", "seed"])
@@ -107,66 +120,88 @@ def render_image_sidebar():
 
 
 def handle_image_generation(prompt, selected_model, params, config, uploaded_file, image_url, negative_prompt):
-    """Generate image synchronously and record as a completed job."""
+    """Generate image asynchronously and record as a job."""
     if not prompt:
         st.warning("Please enter a prompt first.")
         return
 
+    # Process file upload immediately in the main thread
+    b64_image = None
+    if config.image_support and uploaded_file:
+        b64_image = file_to_base64(uploaded_file)
+
     try:
-        with st.spinner("Generating image…"):
-            create_args = {
-                "model": selected_model,
-                "prompt": prompt,
-                **params
-            }
-            
-            if config.image_support:
-                if uploaded_file:
-                    b64_image = file_to_base64(uploaded_file)
-                    if b64_image:
-                        create_args["reference_images"] = [b64_image]
-                elif image_url:
-                    create_args["reference_images"] = [image_url]
+        create_args = {
+            "model": selected_model,
+            "prompt": prompt,
+            **params
+        }
+        
+        if config.image_support:
+            if b64_image:
+                create_args["reference_images"] = [b64_image]
+            elif image_url:
+                create_args["reference_images"] = [image_url]
 
-            if negative_prompt and config.is_supported("negative_prompt"):
-                create_args["negative_prompt"] = negative_prompt
-            
-            create_args = config.apply_transforms(create_args)
+        if negative_prompt and config.is_supported("negative_prompt"):
+            create_args["negative_prompt"] = negative_prompt
+        
+        create_args = config.apply_transforms(create_args)
 
-            response = client.images.generate(**create_args)
-            
-            if response and response.data:
-                image_data = response.data[0]
-                
-                result_url = None
-                result_b64 = None
-                
-                if hasattr(image_data, 'url') and image_data.url:
-                    result_url = image_data.url
-                    _auto_save_image(image_data.url, prompt, selected_model, "url")
-                elif hasattr(image_data, 'b64_json') and image_data.b64_json:
-                    result_b64 = image_data.b64_json
-                    _auto_save_image(image_data.b64_json, prompt, selected_model, "base64")
-                
-                # Record as instantly-completed job
-                add_job(
-                    job_id=None,  # auto-generate UUID
-                    kind="image",
-                    model=selected_model,
-                    prompt=prompt,
-                    params=params,
-                    status="completed",
-                    result_url=result_url,
-                    result_b64=result_b64,
-                    metadata=response.model_dump()
-                )
+        # Generate a unique job ID immediately
+        job_id = str(uuid.uuid4())
 
-                st.toast("🎨 Image generated! Check the Jobs tab.", icon="✨")
-            else:
-                st.error("No image data received from API.")
+        # Add job immediately to the session state so it shows up as in progress
+        add_job(
+            job_id=job_id,
+            kind="image",
+            model=selected_model,
+            prompt=prompt,
+            params=params,
+            status="in_progress"
+        )
+
+        st.toast("🎨 Image generation started! Check the Jobs tab.", icon="✨")
+        
+        # Clear any stale errors
+        st.session_state.pop("last_error", None)
+
+        def worker():
+            try:
+                response = client.images.generate(**create_args)
                 
+                if response and response.data:
+                    image_data = response.data[0]
+                    
+                    result_url = None
+                    result_b64 = None
+                    
+                    if hasattr(image_data, 'url') and image_data.url:
+                        result_url = image_data.url
+                        _auto_save_image(image_data.url, prompt, selected_model, "url")
+                    elif hasattr(image_data, 'b64_json') and image_data.b64_json:
+                        result_b64 = image_data.b64_json
+                        _auto_save_image(image_data.b64_json, prompt, selected_model, "base64")
+                    
+                    update_job(
+                        job_id,
+                        status="completed",
+                        result_url=result_url,
+                        result_b64=result_b64,
+                        metadata=response.model_dump()
+                    )
+                else:
+                    update_job(job_id, status="failed", error="No image data received from API.")
+            except Exception as e:
+                update_job(job_id, status="failed", error=str(e))
+
+        # Spin off the generation in a background thread
+        thread = threading.Thread(target=worker)
+        add_script_run_ctx(thread)
+        thread.start()
+
     except Exception as e:
-        st.error(f"Image generation failed: {str(e)}")
+        st.error(f"Image generation failed to start: {str(e)}")
 
 
 def _auto_save_image(data, prompt, selected_model, data_type):

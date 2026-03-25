@@ -64,7 +64,7 @@ KLING_PARAMS = {
 }
 
 KLING_2_1_PARAMS = {
-    "width", "height", "seconds", "guidance_scale", "seed", "negative_prompt", "output_format", "output_quality", "prompt"
+    "width", "height", "seconds", "seed", "negative_prompt", "output_format", "output_quality", "prompt"
 }
 
 SEEDANCE_PARAMS = {
@@ -108,14 +108,14 @@ VIDEO_MODEL_REGISTRY = {
     "kwaivgI/kling-2.1-master": ModelConfig(
         supported_params=KLING_2_1_PARAMS, 
         defaults={"seconds": 5},
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True
     ),
     "kwaivgI/kling-2.1-pro": ModelConfig(
         supported_params=KLING_2_1_PARAMS, 
         defaults={"seconds": 5},
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True,
         must_have_image=True
@@ -123,7 +123,7 @@ VIDEO_MODEL_REGISTRY = {
     "kwaivgI/kling-2.1-standard": ModelConfig(
         supported_params=KLING_2_1_PARAMS, 
         defaults={"seconds": 5},
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True,
         must_have_image=True
@@ -131,21 +131,21 @@ VIDEO_MODEL_REGISTRY = {
     "kwaivgI/kling-2.0-master": ModelConfig(
         supported_params=KLING_PARAMS, 
         defaults={"seconds": 5}, 
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True
     ),
     "kwaivgI/kling-1.6-pro": ModelConfig(
         supported_params=KLING_PARAMS, 
         defaults={"seconds": 5}, 
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True
     ),
     "kwaivgI/kling-1.6-standard": ModelConfig(
         supported_params=KLING_PARAMS, 
         defaults={"seconds": 5}, 
-        key_mapping={"guidance_scale": "CFGScale", "negative_prompt": "negativePrompt", "reference_images": "frame_images"}, 
+        key_mapping={"reference_images": "frame_images"}, 
         transforms={"seconds": str, "reference_images": transform_kling_images}, 
         image_support=True
     ),

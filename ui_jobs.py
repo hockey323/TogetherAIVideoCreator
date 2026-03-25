@@ -166,7 +166,7 @@ def render_jobs_dashboard():
     done = sum(1 for j in jobs if j["status"] == "completed")
     failed = sum(1 for j in jobs if j["status"] == "failed")
 
-    cols = st.columns([1, 1, 1, 1, 1])
+    cols = st.columns([1, 1, 1, 1, 1, 1])
     with cols[0]:
         st.metric("Total", total)
     with cols[1]:
@@ -176,6 +176,9 @@ def render_jobs_dashboard():
     with cols[3]:
         st.metric("Failed", failed)
     with cols[4]:
+        if st.button("↻ Refresh", key="refresh_dashboard"):
+            st.rerun()
+    with cols[5]:
         if st.button("🗑️ Clear All", key="clear_all_jobs"):
             clear_jobs()
             st.rerun()
