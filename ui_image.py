@@ -176,18 +176,20 @@ def handle_image_generation(prompt, selected_model, params, config, uploaded_fil
                     result_url = None
                     result_b64 = None
                     
+                    local_path = None
                     if hasattr(image_data, 'url') and image_data.url:
                         result_url = image_data.url
-                        _auto_save_image(image_data.url, prompt, selected_model, "url")
+                        local_path = _auto_save_image(image_data.url, prompt, selected_model, "url")
                     elif hasattr(image_data, 'b64_json') and image_data.b64_json:
                         result_b64 = image_data.b64_json
-                        _auto_save_image(image_data.b64_json, prompt, selected_model, "base64")
+                        local_path = _auto_save_image(image_data.b64_json, prompt, selected_model, "base64")
                     
                     update_job(
                         job_id,
                         status="completed",
                         result_url=result_url,
                         result_b64=result_b64,
+                        local_path=local_path,
                         metadata=response.model_dump()
                     )
                 else:
@@ -219,8 +221,11 @@ def _auto_save_image(data, prompt, selected_model, data_type):
                 if r.status_code == 200:
                     with open(full_path, 'wb') as f:
                         f.write(r.content)
+                    return full_path
             elif data_type == "base64":
                 with open(full_path, 'wb') as f:
                     f.write(base64.b64decode(data))
+                return full_path
         except Exception:
             pass
+    return None

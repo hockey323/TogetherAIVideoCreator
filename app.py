@@ -612,6 +612,11 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────────
 init_jobs()
 
+# Streamlit unmounts file uploaders when switching tabs, losing the file buffer.
+# We manually buffer the most recent uploads here to persist them.
+if "v_uploader_buffer" not in st.session_state: st.session_state.v_uploader_buffer = None
+if "i_uploader_buffer" not in st.session_state: st.session_state.i_uploader_buffer = None
+
 # ─────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────
@@ -625,29 +630,29 @@ with st.sidebar:
 
     _modes = ["🎬 Video", "🎨 Image", "📋 Jobs"]
 
-    # Resolve default index — handle dynamic badge labels like "📋 Jobs (3)"
-    _default = 0
-    if "active_tab" in st.session_state:
-        _prev = st.session_state.active_tab
-        if _prev in _modes:
-            _default = _modes.index(_prev)
-        elif _prev.startswith("📋 Jobs"):
-            _default = 2  # Jobs tab
-        elif _prev.startswith("🎨 Image"):
-            _default = 1
+    # Format the tab label to show pending count without mutating the underlying option value
+    def format_tab_label(tab):
+        if tab == "📋 Jobs":
+            _n_pending = pending_count()
+            if _n_pending > 0:
+                return f"📋 Jobs ({_n_pending})"
+        return tab
 
-    # Show pending count badge next to Jobs label
-    _n_pending = pending_count()
-    if _n_pending > 0:
-        _modes[2] = f"📋 Jobs ({_n_pending})"
+    # Initialize default tab if not set
+    if "active_tab" not in st.session_state:
+        # Check old format or default
+        st.session_state.active_tab = "🎬 Video"
+    elif st.session_state.active_tab not in _modes:
+        # Recover from old '📋 Jobs (1)' state safely
+        st.session_state.active_tab = "📋 Jobs" if "Jobs" in st.session_state.active_tab else "🎬 Video"
 
     app_mode = st.radio(
         "Mode",
         _modes,
-        index=_default,
+        key="active_tab",
+        format_func=format_tab_label,
         label_visibility="collapsed"
     )
-    st.session_state.active_tab = app_mode
     st.markdown("---")
 
 # ─────────────────────────────────────────────────────────────────
@@ -668,19 +673,36 @@ if app_mode == "🎬 Video":
     st.markdown('<div class="section-label"><span>✏️</span> PROMPT</div>', unsafe_allow_html=True)
     prompt = st.text_area(
         "Describe your video",
+        value=st.session_state.get("saved_v_prompt", ""),
         height=110,
         placeholder="A cinematic drone shot soaring over a futuristic city at golden hour, volumetric lighting, ultra-wide lens...",
         key="v_prompt",
         label_visibility="collapsed"
     )
+    st.session_state.saved_v_prompt = prompt
 
     # Reference Image (if supported)
     uploaded_file = None
     image_url = None
     if config.image_support:
         st.markdown('<div class="section-label"><span>🖼️</span> REFERENCE IMAGE</div>', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("Upload an image (PNG/JPG)", type=["png", "jpg", "jpeg"], key="v_uploader", label_visibility="collapsed")
-        image_url = st.text_input("Or paste an image URL", placeholder="https://example.com/reference.png", key="v_url", label_visibility="collapsed")
+        # Widget itself - note that Streamlit resets this on tab change
+        v_uploaded = st.file_uploader("Upload an image (PNG/JPG)", type=["png", "jpg", "jpeg"], key="v_uploader", label_visibility="collapsed")
+        # Update buffer if user just uploaded something
+        if v_uploaded: 
+            st.session_state.v_uploader_buffer = v_uploaded
+        # Use either current upload or buffered one
+        uploaded_file = v_uploaded or st.session_state.v_uploader_buffer
+        
+        # Link to prompt
+        image_url = st.text_input(
+            "Or paste an image URL", 
+            value=st.session_state.get("saved_v_url", ""),
+            placeholder="https://example.com/reference.png", 
+            key="v_url", 
+            label_visibility="collapsed"
+        )
+        st.session_state.saved_v_url = image_url
 
     # Negative Prompt
     negative_prompt = None
@@ -688,10 +710,12 @@ if app_mode == "🎬 Video":
         st.markdown('<div class="section-label"><span>🚫</span> NEGATIVE PROMPT</div>', unsafe_allow_html=True)
         negative_prompt = st.text_input(
             "What to avoid",
+            value=st.session_state.get("saved_v_neg_prompt", ""),
             placeholder="blurry, low quality, distorted, watermark, text overlay",
             key="v_neg_prompt",
             label_visibility="collapsed"
         )
+        st.session_state.saved_v_neg_prompt = negative_prompt
 
     # Generate
     st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
@@ -716,19 +740,35 @@ elif app_mode == "🎨 Image":
     st.markdown('<div class="section-label"><span>✏️</span> PROMPT</div>', unsafe_allow_html=True)
     prompt_img = st.text_area(
         "Describe your image",
+        value=st.session_state.get("saved_i_prompt", ""),
         height=110,
         placeholder="A fantasy landscape with floating islands and bioluminescent waterfalls, concept art, trending on ArtStation...",
         key="i_prompt",
         label_visibility="collapsed"
     )
+    st.session_state.saved_i_prompt = prompt_img
 
     # Reference Image (if supported)
     uploaded_file_img = None
     image_url_img = None
     if config_img.image_support:
         st.markdown('<div class="section-label"><span>🖼️</span> REFERENCE IMAGE</div>', unsafe_allow_html=True)
-        uploaded_file_img = st.file_uploader("Upload a reference image", type=["png", "jpg", "jpeg"], key="i_uploader", label_visibility="collapsed")
-        image_url_img = st.text_input("Or paste an image URL", placeholder="https://example.com/reference.png", key="i_url", label_visibility="collapsed")
+        # Widget itself
+        i_uploaded = st.file_uploader("Upload a reference image", type=["png", "jpg", "jpeg"], key="i_uploader", label_visibility="collapsed")
+        # Update buffer
+        if i_uploaded:
+            st.session_state.i_uploader_buffer = i_uploaded
+        # Use either
+        uploaded_file_img = i_uploaded or st.session_state.i_uploader_buffer
+        
+        image_url_img = st.text_input(
+            "Or paste an image URL", 
+            value=st.session_state.get("saved_i_url", ""),
+            placeholder="https://example.com/reference.png", 
+            key="i_url", 
+            label_visibility="collapsed"
+        )
+        st.session_state.saved_i_url = image_url_img
 
     # Negative Prompt
     neg_prompt_img = None
@@ -736,10 +776,12 @@ elif app_mode == "🎨 Image":
         st.markdown('<div class="section-label"><span>🚫</span> NEGATIVE PROMPT</div>', unsafe_allow_html=True)
         neg_prompt_img = st.text_input(
             "What to avoid",
+            value=st.session_state.get("saved_i_neg_prompt", ""),
             placeholder="blurry, low quality, distorted",
             key="i_neg_prompt",
             label_visibility="collapsed"
         )
+        st.session_state.saved_i_neg_prompt = neg_prompt_img
 
     # Generate
     st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)

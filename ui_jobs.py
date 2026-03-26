@@ -57,8 +57,10 @@ def _auto_save_video(video_url, prompt, model, params):
         if r.status_code == 200:
             with open(full_path, 'wb') as f:
                 f.write(r.content)
+            return full_path
     except Exception:
-        pass  # silent — user will see the video in the card anyway
+        pass
+    return None
 
 
 def _auto_save_image(data, prompt, model, data_type):
@@ -77,11 +79,14 @@ def _auto_save_image(data, prompt, model, data_type):
             if r.status_code == 200:
                 with open(full_path, 'wb') as f:
                     f.write(r.content)
+                return full_path
         elif data_type == "base64":
             with open(full_path, 'wb') as f:
                 f.write(base64.b64decode(data))
+            return full_path
     except Exception:
         pass
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -103,12 +108,15 @@ def poll_pending_jobs():
                 video_url = None
                 if hasattr(status, "outputs") and hasattr(status.outputs, "video_url"):
                     video_url = status.outputs.video_url
+                local_path = None
+                if video_url:
+                    local_path = _auto_save_video(video_url, job["prompt"], job["model"], job.get("params", {}))
+                
                 update_job(job["id"],
                            status="completed",
                            result_url=video_url,
+                           local_path=local_path,
                            metadata=status.model_dump())
-                if video_url:
-                    _auto_save_video(video_url, job["prompt"], job["model"], job.get("params", {}))
                 changed = True
             elif status.status == "failed":
                 error_msg = status.error if hasattr(status, 'error') else "Unknown error"
@@ -214,13 +222,23 @@ def _render_job_card(job, idx):
     if job["status"] == "completed":
         if job["kind"] == "video" and job.get("result_url"):
             st.video(job["result_url"])
-            st.markdown(f"[⬇️ Download Video]({job['result_url']})")
+            if job.get("local_path"):
+                st.info(f"💾 Saved to: `{job['local_path']}`")
+                st.markdown(f"[⬇️ Open Local Folder](file:///{os.path.dirname(job['local_path'])})")
+            else:
+                st.markdown(f"[⬇️ Download Video]({job['result_url']})")
         elif job["kind"] == "image":
             if job.get("result_url"):
                 st.image(job["result_url"], use_container_width=True)
-                st.markdown(f"[⬇️ Download Image]({job['result_url']})")
+                if job.get("local_path"):
+                    st.info(f"💾 Saved to: `{job['local_path']}`")
+                    st.markdown(f"[⬇️ Open Local Folder](file:///{os.path.dirname(job['local_path'])})")
+                else:
+                    st.markdown(f"[⬇️ Download Image]({job['result_url']})")
             elif job.get("result_b64"):
                 st.image(f"data:image/png;base64,{job['result_b64']}", use_container_width=True)
+                if job.get("local_path"):
+                    st.info(f"💾 Saved to: `{job['local_path']}`")
 
         if job.get("metadata"):
             with st.expander("Metadata"):
